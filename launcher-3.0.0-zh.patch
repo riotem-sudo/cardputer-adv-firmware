@@ -1,0 +1,103 @@
+From 5375aab9a9ddf075b025b4e2e016aa3b1596a1f4 Mon Sep 17 00:00:00 2001
+From: build <b@b.b>
+Date: Sat, 21 Nov 2026 01:13:37 +0800
+Subject: [PATCH] zh
+
+---
+ boards/m5stack-cardputer/platformio.ini |  2 +-
+ platformio.ini                          | 12 +++++++-----
+ support_files/custom_8Mb_cn.csv         |  6 ++++++
+ support_files/prep_web_files.py         | 17 +++++++++--------
+ 4 files changed, 23 insertions(+), 14 deletions(-)
+ create mode 100644 support_files/custom_8Mb_cn.csv
+
+diff --git a/boards/m5stack-cardputer/platformio.ini b/boards/m5stack-cardputer/platformio.ini
+index b309e72..0680d49 100644
+--- a/boards/m5stack-cardputer/platformio.ini
++++ b/boards/m5stack-cardputer/platformio.ini
+@@ -11,7 +11,7 @@
+ [env:m5stack-cardputer]
+ board = esp32s3
+ board_build.arduino.memory_type = qio_qspi
+-board_build.partitions = support_files/custom_8Mb.csv
++board_build.partitions = support_files/custom_8Mb_cn.csv
+ # board_build.partitions = support_files/custom_8Mb2.csv # debug
+ board_upload.flash_size = 8MB
+ board_upload.maximum_size = 8388608
+diff --git a/platformio.ini b/platformio.ini
+index e82e648..0d4ccde 100644
+--- a/platformio.ini
++++ b/platformio.ini
+@@ -125,19 +125,21 @@ extra_configs =
+ 	boards/*/*.ini
+ 
+ [env]
+-platform = https://github.com/pioarduino/platform-espressif32/releases/download/55.03.39/platform-espressif32.zip
+-platform_packages = framework-arduinoespressif32-libs @ https://github.com/bmorcelli/myLibBuilder/releases/download/builds/launcher_keyboot_esp32-arduino-libs-20260910-173758.tar.gz
++platform = espressif32
++platform_packages =
++	framework-arduinoespressif32 @ symlink://C:/pio/core/packages/framework-arduinoespressif32
++	framework-arduinoespressif32-libs @ symlink://C:/pio/core/packages/framework-arduinoespressif32-libs
+ monitor_filters = esp32_exception_decoder, send_on_enter, colorize
+ monitor_speed = 115200
+ framework = arduino
+ board_build.variants_dir = boards
+ board_upload.offset_address = 0x10000
++lib_deps =
++	bblanchon/ArduinoJson @ ^7.2.1
++
+ extra_scripts =
+-	pre:support_files/check_submodules.py
+ 	pre:support_files/prep_web_files.py
+-	pre:support_files/clang_format.py
+ 	support_files/enable_lto.py
+-	pre:support_files/upload_patch.py
+ 	post:support_files/merge.py
+ ;build_src_flags =
+ 	;-D ENABLE_RAM_LOGGING=1
+diff --git a/support_files/custom_8Mb_cn.csv b/support_files/custom_8Mb_cn.csv
+new file mode 100644
+index 0000000..597189e
+--- /dev/null
++++ b/support_files/custom_8Mb_cn.csv
+@@ -0,0 +1,6 @@
++# Cardputer ADV - Chinese Launcher build (enlarged app0)
++# Name,   Type, SubType, Offset,   Size, Flags
++nvs,      data, nvs,     0x9000,   0x5000,
++otadata,  data, ota,     0xE000,   0x2000,
++app0,     app,  test,    0x10000,  0x200000,
++coredump, data, coredump,0x210000, 0x10000,
+diff --git a/support_files/prep_web_files.py b/support_files/prep_web_files.py
+index dea77ea..6a14620 100644
+--- a/support_files/prep_web_files.py
++++ b/support_files/prep_web_files.py
+@@ -47,17 +47,18 @@ def load_checksum_file(input_file):
+         return f.readline().strip()
+ 
+ 
++def _plain(c):
++    data = c.read()
++    return data if isinstance(data, bytes) else data.encode("utf-8")
++
+ def minify_css(c):
+-    minify_req = requests.post("https://www.toptal.com/developers/cssminifier/api/raw", {"input": c.read().decode('utf-8')})
+-    return c if minify_req is False else minify_req.text.encode('utf-8')
++    return _plain(c)
+ 
+-def minify_js(js):
+-    minify_req = requests.post('https://www.toptal.com/developers/javascript-minifier/api/raw', {'input': js.read().decode('utf-8')})
+-    return js if minify_req is False else minify_req.text.encode('utf-8')
++def minify_js(c):
++    return _plain(c)
+ 
+-def minify_html(html):
+-    minify_req = requests.post('https://www.toptal.com/developers/html-minifier/api/raw', {'input': html.read().decode('utf-8')})
+-    return html if minify_req is False else minify_req.text.encode('utf-8')
++def minify_html(c):
++    return _plain(c)
+ 
+ # gzip web files
+ def prepare_www_files():
+-- 
+2.56.0.windows.4
+
