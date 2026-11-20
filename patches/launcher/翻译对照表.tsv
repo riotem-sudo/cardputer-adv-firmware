@@ -1,0 +1,300 @@
+Main Menu	主菜单
+[Main Menu]	[主菜单]
+[Next Page]	[下一页]
+[Previous Page]	[上一页]
+[Refine Search]	[缩小范围]
+[Update all]	[全部更新]
+[Sel ok]	[确认]
+Back	返回
+> Back	> 返回
+Back to Menu	回主菜单
+Back to List	回列表
+Cancel	取消
+Ok	确定
+Exit	退出
+Options	选项
+Launcher	启动器
+-=Launcher=-	-=启动器=-
+-= Launcher WebUI =-	-= 网页管理 =-
+-= USB MSC =-	-= USB 存储 =-
+by: 	作者: 
+v: 	版本: 
+from: 	来源: 
+APP: 	应用: 
+SEL	确认
+LAUNCHER	启动器
+SD	SD卡
+OTA	在线安装
+WUI	网页
+CFG	设置
+Config	设置
+APP	应用
+Charge Mode	充电模式
+Online Installer	在线安装
+Launch from SDCard	从SD卡启动
+Launch from or mng SDCard	启动/管理SD卡
+Start WebUI	开启网页管理
+Start Web User Interface	开启网页管理界面
+Start CardKb	启动卡键盘
+Change Settings.	修改设置
+Change Launcher Settings.	修改启动器设置
+Add to Favorite	加入收藏
+Remove Favorite	取消收藏
+Favorite List	收藏列表
+Install	安装
+Installing 	正在安装 
+Installing FAT	正在安装FAT分区
+Install info failed	安装信息失败
+Fresh Install	全新安装
+OTA Install	在线安装
+OTA List	在线列表
+Download->SD	下载到SD卡
+Downloaded	已下载
+Downloaded 	 已下载 
+Download FAILED	下载失败
+Download FAILED: 	下载失败: 
+View firmware	查看固件
+Firmware list fetch Failed	固件列表获取失败
+Version fetch Failed	版本获取失败
+Update check failed	检查更新失败
+Checking updates...	正在检查更新...
+Check for Updates	检查更新
+Launcher Update	启动器更新
+No updates found	没有可用更新
+No downloads found	没有已下载固件
+No firmware available on the list	列表中没有固件
+Order by name	按名称排序
+Order by latest	按最新排序
+Order by downloads	按下载量排序
+Text Search	文字搜索
+Category not found.	未找到分类
+Server unreachable	服务器不可达
+Bad server response	服务器响应异常
+JSON Parse Failed:	JSON解析失败:
+WiFi not connected	WiFi未连接
+WiFi lost during fetch	获取时WiFi断开
+WiFi scan failed	WiFi扫描失败
+Retry WiFi Module	重试WiFi模块
+Hidden SSID	隐藏SSID
+Wrong Password	密码错误
+AP mode	热点模式
+my Network	我的网络
+IP 	 IP 
+SDCard Not Found	未找到SD卡
+SD card not found.	未找到SD卡
+SD not found or not formatted in FAT32	SD卡缺失或非FAT32
+Insert SD Card	请插入SD卡
+Fail to start SDCard	SD卡启动失败
+No apps found	未找到应用
+App not found	应用不存在
+App renamed	应用已重命名
+Rename App	重命名应用
+Rename failed	重命名失败
+Renamed from 	重命名自 
+Bad app offset	应用偏移错误
+Bad install info	安装信息错误
+Invalid app image	应用镜像无效
+Invalid app size	应用大小无效
+Invalid link	链接无效
+Invalid partition	分区无效
+Invalid table	分区表无效
+Partition not found	未找到分区
+Partition read failed	分区读取失败
+Partition renamed	分区已重命名
+Partition fix failed	分区修复失败
+Partition Scheme	分区方案
+* Partition Scheme	* 分区方案
+Protected partition	受保护分区
+* = protected	* = 受保护
+Add FAT	添加FAT
+Add OTA	添加OTA
+Add SPIFFS	添加SPIFFS
+SPIFFS Yes	SPIFFS 是
+SPIFFS No	SPIFFS 否
+Apply Changes	应用更改
+Apply changes first	请先应用更改
+Associate to Bin	关联到固件
+Attach to a file	关联到文件
+Backup Data	备份数据
+Backup Data partition	备份数据分区
+Backup	备份
+Backing up	正在备份
+Backing up 	正在备份 
+Backup saved	备份已保存
+Backup saved!	备份已保存
+Backup failed	备份失败
+Backup failed: 	备份失败: 
+Backup failed: no RAM	备份失败: 内存不足
+Restore Data	恢复数据
+Restore Last Data	恢复上次数据
+Previous backup found. Restore?	发现上次备份, 恢复?
+Restored!	已恢复
+Complete!	完成
+Restoring 	正在恢复 
+Restore failed	恢复失败
+Restore failed: 	恢复失败: 
+Restore failed: no RAM	恢复失败: 内存不足
+Data restored	数据已恢复
+Remove Without Backup	删除且不备份
+Overwrite current data?	覆盖当前数据?
+Wipe Flash memory	擦除Flash
+Format NVS Partition	格式化NVS分区
+Formatting NVS	正在格式化NVS
+NVS not found	未找到NVS
+Erase BLE Bonds	清除BLE配对
+BLE bonds erased	BLE配对已清除
+Bond erase failed	清除配对失败
+No BLE bonds stored	无已存配对
+Clearing App registry	清除应用注册表
+Clearing boot	清除开机项
+Registry clear failed	注册表清除失败
+No space in range	范围内无空间
+No usable range	无可用区间
+No free range	无空闲区间
+No OTA slot	无OTA槽位
+No install space	安装空间不足
+No memory	内存不足
+No options available	无可选项
+Create failed	创建失败
+Couldn't create folder	无法创建文件夹
+Can't create target	无法创建目标
+Can't create: 	无法创建: 
+Cannot copy Folder	无法复制文件夹
+Cannot format	无法格式化
+Move failed	移动失败
+File not found	文件不存在
+Can't open file	无法打开文件
+Can't open source	无法打开源文件
+Can't open target	无法打开目标
+Can't reopen target	无法重新打开目标
+Fail open root	打开根目录失败
+Read failed	读取失败
+Write failed	写入失败
+Size failed	调整大小失败
+Compact failed	压缩失败
+Edit Size	调整大小
+Fail creating file.	创建文件失败
+Fail on rename.	重命名失败
+Getting file info	正在读取文件信息
+Getting info from 	正在读取信息: 
+New Folder	新建文件夹
+Label already in use	标签已占用
+Key reserved for navigation	该键已被导航占用
+Press a key to bind...	按键以绑定...
+Bind to key	绑定按键
+Linked to 	已绑定到 
+Manage shortcuts	管理快捷键
+Deactivate Dev	关闭开发模式
+Dev mode Activated	开发模式已启用
+Default (	默认 (
+Landscape	横向
+Portrait	纵向
+UI Color	界面颜色
+Brightness	亮度
+Dim time	息屏时间
+Boot Animation	开机动画
+Boot Timer (s)	开机画面(秒)
+GPIO on boot starts Launcher	开机按键进启动器
+Restart needed	需要重启
+Restart your device	重启设备
+Reset All	全部重置
+Reset Configs/Wifi	重置配置与WiFi
+Table failed	分区表操作失败
+Updating partition	正在更新分区
+Updating table	正在更新分区表
+Writing table	正在写分区表
+Optimizing flash	优化Flash
+Confirm/Exit	确认/退出
+press Sel to stop	按确认停止
+Sel to apply	按确认应用
+Turn off Device	关机
+Use M5Burner!	请使用M5Burner!
+WebUI unavailable with ESP-AT WiFi	ESP-AT WiFi下无网页界面
+WebUI Update Fail:	网页更新失败: 
+ESP-Hosted unavailable: no WiFi	ESP-Hosted不可用, 无WiFi
+Boot failed	启动失败
+Bad	异常
+1+0s	1+0秒
+1+1s	1+1秒
+1+2s	1+2秒
+1+3s	1+3秒
+1+4s	1+4秒
+10s	10秒
+15s	15秒
+30s	30秒
+45s	45秒
+60s	60秒
+Falha ao abrir o arquivo original para leitura	无法打开源文件读取
+Falha ao criar o arquivo de destino	无法创建目标文件
+Falha ao escrever no arquivo de destino	无法写入目标文件
+Falha ao inicializar o cartão SD	SD卡初始化失败
+Falha ao iniciar o cartão SD	SD卡启动失败
+No OTA slot	无OTA槽位
+Erase	擦除
+Format	格式化
+Copy	复制
+Delete	删除
+Rename	重命名
+Open	打开
+Install	安装
+Update	更新
+Update All	全部更新
+Restart	重启
+Power Off	关机
+Boot	启动
+Apps	应用
+Files	文件
+WiFi	WiFi
+SD Card	SD卡
+Partition	分区
+Settings	设置
+About	关于
+Tools	工具
+Search	搜索
+Load	载入
+Save	保存
+Error	错误
+Success	成功
+Failed	失败
+Done	完成
+Wait	请稍候
+Loading	载入中
+Connecting	正在连接
+Connected	已连接
+Disconnected	已断开
+Not found	未找到
+Found	已找到
+Yes	是
+No	否
+Retry	重试
+Continue	继续
+Skip	跳过
+Stop	停止
+Start	开始
+On	开
+Off	关
+Auto	自动
+Manual	手动
+Default	默认
+Custom	自定义
+Size	大小
+Name	名称
+Version	版本
+Author	作者
+Date	日期
+Status	状态
+Info	信息
+Details	详情
+Download	下载
+Upload	上传
+Copy	复制
+Move	移动
+Paste	粘贴
+Erase	擦除
+Format	格式化
+Mount	挂载
+Unmount	卸载
+Reboot	重启
+Recovery	恢复
+Factory Reset	出厂重置
+Deep Sleep	深度睡眠

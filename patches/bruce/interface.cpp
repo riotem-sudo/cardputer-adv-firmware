@@ -1,0 +1,630 @@
+#include "core/powerSave.h"
+#include "core/utils.h"
+#include "hal/bright/bright.h"
+#include <Adafruit_TCA8418.h>
+#include <Keyboard.h>
+#include <Wire.h>
+#include <interface.h>
+
+#define CAP_CC1101_GDO0_PIN 15
+#define TCA8418_I2C_ADDR 0x34
+#define TCA8418_SCL_PIN 9
+#define TCA8418_SDA_PIN 8
+
+static const HalBrightCurve brightCurve = {
+    .pwm_min = 75,
+    .pwm_max = 255,
+    .gamma = 2.2f,
+};
+
+// Cardputer and 1.1 keyboard
+Keyboard_Class Keyboard;
+// TCA8418 keyboard controller for ADV variant
+Adafruit_TCA8418 tca;
+bool UseTCA8418 = false; // Set to true to use TCA8418 (Cardputer ADV)
+
+// Keyboard state variables
+bool fn_key_pressed = false;
+bool shift_key_pressed = false;
+bool caps_lock = false;
+
+constexpr unsigned long TCA8418_REPEAT_START_MS = 350;
+constexpr unsigned long TCA8418_REPEAT_MS = 150;
+
+int handleSpecialKeys(uint8_t row, uint8_t col, bool pressed);
+void mapRawKeyToPhysical(uint8_t rawValue, uint8_t &row, uint8_t &col);
+
+char getKeyChar(uint8_t row, uint8_t col) {
+    char keyVal;
+    if (shift_key_pressed ^ caps_lock) {
+        keyVal = _key_value_map[row][col].value_second;
+    } else {
+        keyVal = _key_value_map[row][col].value_first;
+    }
+    return keyVal;
+}
+
+int handleSpecialKeys(uint8_t row, uint8_t col, bool pressed) {
+    char keyVal = _key_value_map[row][col].value_first;
+    switch (keyVal) {
+        case 0xFF:
+            fn_key_pressed = pressed;
+            if (fn_key_pressed) Serial.println("FN Pressed");
+            else Serial.println("FN Released");
+            return 1;
+        case 0x81:
+            shift_key_pressed = pressed;
+            if (shift_key_pressed) Serial.println("Shift Pressed");
+            else Serial.println("Shift Released");
+            if (shift_key_pressed && fn_key_pressed) {
+                caps_lock = !caps_lock;
+                if (caps_lock) Serial.println("CAPS Lock activated");
+                else Serial.println("CAPS Lock DEactivated");
+                shift_key_pressed = false;
+                fn_key_pressed = false;
+            }
+            return 1;
+        default: break;
+    }
+    return 0;
+}
+
+/***************************************************************************************
+** Function name: mapRawKeyToPhysical()
+** Location: interface.cpp
+** Description:   initial mapping for keyboard
+***************************************************************************************/
+inline void mapRawKeyToPhysical(uint8_t keyvalue, uint8_t &row, uint8_t &col) {
+    const uint8_t u = keyvalue % 10; // 1..8
+    const uint8_t t = keyvalue / 10; // 0..6
+
+    if (u >= 1 && u <= 8 && t <= 6) {
+        const uint8_t u0 = u - 1;   // 0..7
+        row = u0 & 0x03;            // bits [1:0] => 0..3
+        col = (t << 1) | (u0 >> 2); // t*2 + bit2(u0) => 0..13
+    } else {
+        row = 0xFF; // invalid
+        col = 0xFF;
+    }
+}
+
+/***************************************************************************************
+** Function name: _setup_gpio()
+** Location: main.cpp
+** Description:   initial setup for the device
+***************************************************************************************/
+void _setup_gpio() {
+    // MCLK stays NC: the ES8311 on the ADV derives it from BCLK, and GPIO43 is LRCLK only --
+    // routing MCLK to the same GPIO would overwrite LRCLK in the GPIO matrix.
+    bruceConfigPins.speaker_bus = {(gpio_num_t)41, (gpio_num_t)43, (gpio_num_t)42, GPIO_NUM_NC};
+    // Cardputer classic wiring: PDM mic. The ADV switches to I2S in _post_setup_gpio().
+    bruceConfigPins.mic_bus = {(gpio_num_t)43, (gpio_num_t)46, GPIO_NUM_NC, MIC_TYPE_PDM};
+    bruceConfigPins.i2c_bus = {(gpio_num_t)2, (gpio_num_t)1};   // sda, scl (Grove)
+    bruceConfigPins.sys_i2c = {(gpio_num_t)-1, (gpio_num_t)-1}; // -1 unless ADV variant detected
+    bruceConfigPins.rfTx = 2;
+    bruceConfigPins.rfRx = 1;
+    bruceConfigPins.irTx = 44;
+    bruceConfigPins.irRx = 1;
+    bruceConfigPins.rotation = 1;
+    bruceConfigPins.badusb_bus = {(gpio_num_t)1, (gpio_num_t)2}; // rx, tx (CH9329)
+    // Board's default/generic SPI bus, shared with SDCARD (used by drivers without their own bus,
+    // e.g. the RC522-SPI RFID2 driver)
+    bruceConfigPins.outer_bus = {(gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1};
+    // Connections use a microSD sniffer module sharing SPI with SDCARD (CS=GROVE_SCL)
+    bruceConfigPins.CC1101_bus = {
+        (gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1, (gpio_num_t)2, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,gdo0,gdo2
+    bruceConfigPins.NRF24_bus = {
+        (gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1, (gpio_num_t)2
+    }; // sck,miso,mosi,cs(ss),ce
+#if !defined(LITE_VERSION)
+    bruceConfigPins.W5500_bus = {
+        (gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1, (gpio_num_t)2, GPIO_NUM_NC
+    }; // sck,miso,mosi,cs,int,rst
+    bruceConfigPins.LoRa_bus = {
+        (gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)5, (gpio_num_t)3, (gpio_num_t)4
+    }; // sck,miso,mosi,cs,rst,dio0
+#endif
+    bruceConfigPins.SDCARD_bus = {
+        (gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)12
+    }; // sck,miso,mosi,cs
+    // RFID2 (RC522-SPI driver) shares the default SPI port; same cs as CC1101/NRF24
+    bruceConfigPins.PN532_bus = {(gpio_num_t)40, (gpio_num_t)39, (gpio_num_t)14, (gpio_num_t)1};
+    // Alt wiring: M5Stack Cap CC1101, shares the default SPI port with the SD card and the cap's
+    // own ST25R3916. https://docs.m5stack.com/en/cap/Cap_CC1101
+#ifdef CAP_CC1101_SS_PIN
+    bruceConfigPins.CC1101_presets = {
+        {"M5 Cap",
+         {bruceConfigPins.outer_bus.sck,
+          bruceConfigPins.outer_bus.miso,
+          bruceConfigPins.outer_bus.mosi,
+          (gpio_num_t)CAP_CC1101_SS_PIN,
+          (gpio_num_t)CAP_CC1101_GDO0_PIN,
+          GPIO_NUM_NC}}
+    };
+#endif
+
+    //    Keyboard.begin();
+    pinMode(0, INPUT);
+    pinMode(5, OUTPUT);
+    // Set GPIO5 HIGH for SD card compatibility (thx for the tip @bmorcelli & 7h30th3r0n3)
+    digitalWrite(5, HIGH);
+}
+volatile bool kb_interrupt = false;
+void IRAM_ATTR gpio_isr_handler(void *arg) {
+    kb_interrupt = true;
+    // static long i = 0;
+    // Serial.printf("interrupt %ld\n", i++);
+}
+void _post_setup_gpio() {
+    hal_bright_attach(TFT_BL);
+    hal_bright_set(TFT_BL, 100, brightCurve);
+    // Initialize TCA8418 I2C keyboard controller
+    Serial.println("DEBUG: Cardputer ADV - Initializing TCA8418 keyboard");
+
+    // Use correct I2C pins for Cardputer ADV
+    Serial.printf("DEBUG: Initializing I2C with SDA=%d, SCL=%d\n", TCA8418_SDA_PIN, TCA8418_SCL_PIN);
+    Wire1.begin(TCA8418_SDA_PIN, TCA8418_SCL_PIN);
+    delay(100);
+
+    // Scan I2C bus to see what's available
+    Serial.println("DEBUG: Scanning I2C bus...");
+    byte found_devices = 0;
+    for (byte i = 1; i < 127; i++) {
+        Wire1.beginTransmission(i);
+        if (Wire1.endTransmission() == 0) {
+            Serial.printf("DEBUG: Found I2C device at address 0x%02X\n", i);
+            found_devices++;
+        }
+    }
+    Serial.printf("DEBUG: Found %d I2C devices\n", found_devices);
+
+    // Try to initialize TCA8418
+    Serial.printf("DEBUG: Attempting to initialize TCA8418 at address 0x%02X\n", TCA8418_I2C_ADDR);
+    UseTCA8418 = tca.begin(TCA8418_I2C_ADDR, &Wire1);
+
+    if (!UseTCA8418) {
+        Serial.println("ADV  : Failed to initialize TCA8418!");
+        Serial.println("Probable standard Cardputer detected, switching to Keyboard library");
+        Wire1.end();
+        Keyboard.begin();
+        return;
+    }
+    // Cardputer ADV wiring defaults, applied after the TCA8418 probe detects the ADV
+    // hardware. This hook runs after /brucePins.conf was loaded, so every pin goes through
+    // applyBoardDefault(): a value that already differs from the _setup_gpio() default came
+    // from the conf file and the user's wiring wins (issue #2937).
+    applyBoardDefault(bruceConfigPins.sys_i2c.sda, brucePinsSetupDefaults.sys_i2c.sda, (gpio_num_t)8);
+    applyBoardDefault(bruceConfigPins.sys_i2c.scl, brucePinsSetupDefaults.sys_i2c.scl, (gpio_num_t)9);
+
+    // Cardputer ADV reads the mic through the ES8311 codec over MSB/left-justified I2S instead
+    // of the classic Cardputer's PDM wiring; GPIO43 is the shared LRCLK.
+    applyBoardDefault(bruceConfigPins.mic_bus.clk, brucePinsSetupDefaults.mic_bus.clk, (gpio_num_t)41);
+    applyBoardDefault(bruceConfigPins.mic_bus.ws, brucePinsSetupDefaults.mic_bus.ws, (gpio_num_t)43);
+    applyBoardDefault(bruceConfigPins.mic_bus.data, brucePinsSetupDefaults.mic_bus.data, (gpio_num_t)46);
+    applyBoardDefault(
+        bruceConfigPins.mic_bus.type, brucePinsSetupDefaults.mic_bus.type, (int)MIC_TYPE_I2S_MSB
+    );
+
+    applyBoardDefault(bruceConfigPins.gps_bus.rx, brucePinsSetupDefaults.gps_bus.rx, (gpio_num_t)15);
+    applyBoardDefault(bruceConfigPins.gps_bus.tx, brucePinsSetupDefaults.gps_bus.tx, (gpio_num_t)13);
+    applyBoardDefault(bruceConfigPins.gpsBaudrate, brucePinsSetupDefaults.gpsBaudrate, 115200);
+
+    applyBoardDefault(bruceConfigPins.CC1101_bus.sck, brucePinsSetupDefaults.CC1101_bus.sck, (gpio_num_t)40);
+    applyBoardDefault(
+        bruceConfigPins.CC1101_bus.miso, brucePinsSetupDefaults.CC1101_bus.miso, (gpio_num_t)39
+    );
+    applyBoardDefault(
+        bruceConfigPins.CC1101_bus.mosi, brucePinsSetupDefaults.CC1101_bus.mosi, (gpio_num_t)14
+    );
+#ifdef CAP_CC1101_SS_PIN
+    // ADV + M5 Cap CC1101 (JosephCGS 魔改同款硬件): CC1101 CS=5 on the cap bus, GDO0=15,
+    // RF antenna switch SW0=13 (driven inside rf_utils when cs == CAP_CC1101_SS_PIN).
+    // CS deliberately equals the cap SS pin so initRfModule()/setMHZ() take the cap path and
+    // power the cap (CAP_CC1101_POWER_EN) instead of leaving the module dead.
+    // io0 must be the real GDO0 (15), NOT 5 - 5 is the CS line, and rf_listen attaches an
+    // interrupt to io0.
+    applyBoardDefault(
+        bruceConfigPins.CC1101_bus.cs, brucePinsSetupDefaults.CC1101_bus.cs, (gpio_num_t)CAP_CC1101_SS_PIN
+    );
+    applyBoardDefault(
+        bruceConfigPins.CC1101_bus.io0, brucePinsSetupDefaults.CC1101_bus.io0, (gpio_num_t)CAP_CC1101_GDO0_PIN
+    );
+#else
+    // GPIO13 is the Cardputer ADV GPS TX pin; leave CC1101 CS unassigned by default.
+    applyBoardDefault(bruceConfigPins.CC1101_bus.cs, brucePinsSetupDefaults.CC1101_bus.cs, (gpio_num_t)-1);
+    applyBoardDefault(bruceConfigPins.CC1101_bus.io0, brucePinsSetupDefaults.CC1101_bus.io0, (gpio_num_t)5);
+#endif
+
+    applyBoardDefault(bruceConfigPins.NRF24_bus.sck, brucePinsSetupDefaults.NRF24_bus.sck, (gpio_num_t)40);
+    applyBoardDefault(bruceConfigPins.NRF24_bus.miso, brucePinsSetupDefaults.NRF24_bus.miso, (gpio_num_t)39);
+    applyBoardDefault(bruceConfigPins.NRF24_bus.mosi, brucePinsSetupDefaults.NRF24_bus.mosi, (gpio_num_t)14);
+    applyBoardDefault(bruceConfigPins.NRF24_bus.cs, brucePinsSetupDefaults.NRF24_bus.cs, (gpio_num_t)6);
+    applyBoardDefault(bruceConfigPins.NRF24_bus.io0, brucePinsSetupDefaults.NRF24_bus.io0, (gpio_num_t)4);
+
+    pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
+    pinMode(bruceConfigPins.LoRa_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
+    digitalWrite(bruceConfigPins.LoRa_bus.cs, HIGH);
+
+    tca.matrix(7, 8);
+    tca.flush();
+    pinMode(11, INPUT);
+    attachInterruptArg(digitalPinToInterrupt(11), gpio_isr_handler, nullptr, CHANGE);
+    tca.enableInterrupts();
+}
+
+/*********************************************************************
+** Function: setBrightness
+** location: settings.cpp
+** set brightness value
+**********************************************************************/
+void _setBrightness(uint8_t brightval) { hal_bright_set(TFT_BL, brightval, brightCurve); }
+
+/*********************************************************************
+** Function: InputHandler
+** Handles the variables PrevPress, NextPress, SelPress, AnyKeyPress and EscPress
+**********************************************************************/
+void InputHandler(void) {
+    static unsigned long tm = 0;
+    static unsigned long nextRepeatTime = 0;
+    static unsigned long prevRepeatTime = 0;
+    static unsigned long upRepeatTime = 0;
+    static unsigned long downRepeatTime = 0;
+
+    static bool sel = false;
+    static bool prev = false;
+    static bool next = false;
+    static bool up = false;
+    static bool down = false;
+    static bool esc = false;
+    static bool del = false;
+    static bool gui = false;
+    static bool alt = false;
+    static bool ctrl = false;
+
+    bool arrow_up = false;
+    bool arrow_dw = false;
+    bool arrow_ry = false;
+    bool arrow_le = false;
+    if (!UseTCA8418 && millis() - tm < 200 && !LongPress) return;
+
+    if (digitalRead(0) == LOW) { // GPIO0 button, shoulder button
+        tm = millis();
+        if (!wakeUpScreen()) yield();
+        else return;
+        SelPress = true;
+        AnyKeyPress = true;
+    }
+
+    if (UseTCA8418) {
+        bool keyEventHandled = false;
+        bool nextPulse = false;
+        bool prevPulse = false;
+        bool upPulse = false;
+        bool downPulse = false;
+        bool delPulse = false;
+        bool keyPulse = false;
+        keyStroke key;
+
+        if (kb_interrupt || digitalRead(11) == LOW) {
+            if (!kb_interrupt && digitalRead(11) == LOW) {
+                detachInterrupt(digitalPinToInterrupt(11));
+                attachInterruptArg(digitalPinToInterrupt(11), gpio_isr_handler, nullptr, CHANGE);
+                Serial.println("Forcing keyboard interrupt, Restoring Interruptions.");
+                kb_interrupt = true;
+            }
+
+            while (tca.available() > 0) {
+                int keyEvent = tca.getEvent();
+                bool pressed = (keyEvent & 0x80); // Bit 7: 1 Pressed, 0 Released
+                uint8_t value = keyEvent & 0x7F;  // Bits 0-6: key value
+
+                uint8_t row, col;
+                mapRawKeyToPhysical(value, row, col);
+                if (row >= 4 || col >= 14) continue;
+                if (wakeUpScreen()) continue;
+
+                AnyKeyPress = true;
+                keyEventHandled = true;
+
+                if (handleSpecialKeys(row, col, pressed) > 0) continue;
+
+                if (!pressed) { KeyStroke.Clear(); }
+
+                char keyVal = getKeyChar(row, col);
+
+                if (keyVal == KEY_BACKSPACE && col == 13) {
+                    del = pressed;
+                    esc = pressed;
+                    if (pressed) delPulse = true;
+                } else if (keyVal == '`') {
+                    esc = pressed;
+                } else if (keyVal == KEY_ENTER && col == 13) {
+                    sel = pressed;
+                } else if (keyVal == ';') {
+                    up = pressed;
+                    arrow_up = pressed;
+                    if (pressed) {
+                        prev = true;
+                        prevPulse = true;
+                        upPulse = true;
+                        prevRepeatTime = millis() + TCA8418_REPEAT_START_MS;
+                        upRepeatTime = millis() + TCA8418_REPEAT_START_MS;
+                    } else {
+                        prev = false;
+                    }
+                } else if (keyVal == ',') {
+                    prev = pressed;
+                    arrow_le = pressed;
+                    if (pressed) {
+                        prevPulse = true;
+                        prevRepeatTime = millis() + TCA8418_REPEAT_START_MS;
+                    }
+                } else if (keyVal == '.') {
+                    down = pressed;
+                    arrow_dw = pressed;
+                    if (pressed) {
+                        next = true;
+                        nextPulse = true;
+                        downPulse = true;
+                        nextRepeatTime = millis() + TCA8418_REPEAT_START_MS;
+                        downRepeatTime = millis() + TCA8418_REPEAT_START_MS;
+                    } else {
+                        next = false;
+                    }
+                } else if (keyVal == '/') {
+                    next = pressed;
+                    arrow_ry = pressed;
+                    if (pressed) {
+                        nextPulse = true;
+                        nextRepeatTime = millis() + TCA8418_REPEAT_START_MS;
+                    }
+                } else if (keyVal == 0xFF) {
+                    key.fn = pressed;
+                } else if (keyVal == KEY_LEFT_CTRL) {
+                    ctrl = pressed;
+                } else if (keyVal == KEY_LEFT_ALT) {
+                    alt = pressed;
+                } else if (keyVal == KEY_OPT) {
+                    gui = pressed;
+                }
+
+                if (!pressed) continue;
+
+                if (gui) {
+                    key.gui = true;
+                    key.modifier_keys.emplace_back(KEY_OPT);
+                    key.hid_keys.emplace_back(KEY_OPT);
+                    keyPulse = true;
+                }
+                if (alt) {
+                    key.alt = true;
+                    key.modifier_keys.emplace_back(KEY_LEFT_ALT);
+                    key.hid_keys.emplace_back(KEY_LEFT_ALT);
+                    keyPulse = true;
+                }
+                if (ctrl) {
+                    key.ctrl = true;
+                    key.modifier_keys.emplace_back(KEY_LEFT_CTRL);
+                    key.hid_keys.emplace_back(KEY_LEFT_CTRL);
+                    keyPulse = true;
+                }
+                if (shift_key_pressed) {
+                    key.modifier_keys.emplace_back(KEY_LEFT_SHIFT);
+                    key.hid_keys.emplace_back(KEY_LEFT_SHIFT);
+                    keyPulse = true;
+                }
+                if (sel) {
+                    key.enter = true;
+                    key.exit_key = true;
+                    keyPulse = true;
+                }
+                if (fn_key_pressed) {
+                    key.fn = true;
+                    keyPulse = true;
+                }
+
+                if (keyVal != 0xFF && !sel && !gui && !alt && !ctrl && !del && keyVal != KEY_LEFT_SHIFT) {
+                    if (fn_key_pressed && arrow_up) key.word.emplace_back(0xDA);
+                    else if (fn_key_pressed && arrow_dw) key.word.emplace_back(0xD9);
+                    else if (fn_key_pressed && arrow_ry) key.word.emplace_back(0xD7);
+                    else if (fn_key_pressed && arrow_le) key.word.emplace_back(0xD8);
+                    else if (fn_key_pressed && keyVal == '`') key.word.emplace_back(0xB1);
+                    else key.word.emplace_back(keyVal);
+                    keyPulse = true;
+                }
+            }
+
+            tca.writeRegister(TCA8418_REG_INT_STAT, 1);
+            int intstat = tca.readRegister(TCA8418_REG_INT_STAT);
+            if ((intstat & 0x01) == 0) { kb_interrupt = false; }
+        }
+
+        unsigned long now = millis();
+        if (next && now >= nextRepeatTime) {
+            nextPulse = true;
+            nextRepeatTime = now + TCA8418_REPEAT_MS;
+        }
+        if (prev && now >= prevRepeatTime) {
+            prevPulse = true;
+            prevRepeatTime = now + TCA8418_REPEAT_MS;
+        }
+        if (up && now >= upRepeatTime) {
+            upPulse = true;
+            upRepeatTime = now + TCA8418_REPEAT_MS;
+        }
+        if (down && now >= downRepeatTime) {
+            downPulse = true;
+            downRepeatTime = now + TCA8418_REPEAT_MS;
+        }
+
+        if (!keyEventHandled && !nextPulse && !prevPulse && !upPulse && !downPulse && !LongPress) {
+            sel = false;
+            esc = false;
+        }
+
+        if (delPulse) {
+            key.del = true;
+            key.pressed = true;
+            if (fn_key_pressed) {
+                key.word.emplace_back(0xD4);
+                key.del = false;
+                key.fn = false;
+                del = false;
+                fn_key_pressed = false;
+            }
+            keyPulse = true;
+        }
+
+        if (keyPulse) {
+            key.pressed = true;
+            KeyStroke = key;
+        } else if (!nextPulse && !prevPulse && !upPulse && !downPulse) {
+            KeyStroke.Clear();
+        }
+
+        if (nextPulse || prevPulse || upPulse || downPulse || keyPulse) AnyKeyPress = true;
+
+        NextPress = nextPulse;
+        PrevPress = prevPulse;
+        UpPress = upPulse;
+        DownPress = downPulse;
+        if (!SelPress) SelPress = sel;
+        EscPress = esc;
+        tm = now;
+    } else {
+        Keyboard.update();
+        if (Keyboard.isPressed()) {
+            tm = millis();
+            if (!wakeUpScreen()) AnyKeyPress = true;
+            else return;
+            keyStroke key;
+            Keyboard_Class::KeysState status = Keyboard.keysState();
+            for (auto i : status.hid_keys) key.hid_keys.emplace_back(i);
+            for (auto i : status.word) {
+                if (i == '`' || i == KEY_BACKSPACE) EscPress = true;
+
+                if (i == ';') {
+                    arrow_up = true;
+                    PrevPress = true;
+                }
+                if (i == '.') {
+                    arrow_dw = true;
+                    NextPress = true;
+                }
+                if (i == '/') {
+                    arrow_ry = true;
+                    NextPress = true;
+                    NextPagePress = true;
+                }
+                if (i == ',') {
+                    arrow_le = true;
+                    PrevPress = true;
+                    PrevPagePress = true;
+                }
+                if (status.fn && arrow_up) key.word.emplace_back(0xDA);
+                else if (status.fn && arrow_dw) key.word.emplace_back(0xD9);
+                else if (status.fn && arrow_ry) key.word.emplace_back(0xD7);
+                else if (status.fn && arrow_le) key.word.emplace_back(0xD8);
+                else if (status.fn && i == '`') key.word.emplace_back(0xB1);
+                else key.word.emplace_back(i);
+            }
+            // Add CTRL, ALT and Tab to keytroke without modifier
+            key.alt = status.alt;
+            key.ctrl = status.ctrl;
+            key.gui = status.opt;
+            // Add Tab key
+            if (status.tab) key.word.emplace_back(0xB3);
+
+            for (auto i : status.modifier_keys) key.modifier_keys.emplace_back(i);
+            if (status.del) key.del = true;
+            if (status.enter) {
+                key.enter = true;
+                key.exit_key = true;
+                SelPress = true;
+            }
+            if (status.fn) key.fn = true;
+            if (key.fn && key.del) {
+                key.word.emplace_back(0xD4);
+                key.del = false;
+                key.fn = false;
+            }
+            key.pressed = true;
+            KeyStroke = key;
+        } else KeyStroke.Clear();
+    }
+}
+
+/*********************************************************************
+** Function: powerOff
+** location: mykeyboard.cpp
+** Turns off the device (or try to)
+**********************************************************************/
+void powerOff() {}
+
+/*********************************************************************
+** Function: checkReboot
+** location: mykeyboard.cpp
+** Btn logic to turn off the device (name is odd btw)
+**********************************************************************/
+void checkReboot() {}
+
+/*********************************************************************
+** Function: _setup_codec_speaker
+** location: modules/others/audio.cpp
+** Handles audio CODEC to enable/disable speaker
+**********************************************************************/
+void _setup_codec_speaker(bool enable) {
+    if (!UseTCA8418) return;
+
+    static constexpr const uint8_t enabled_bulk_data[] = {
+        2, 0x00, 0x80, // 0x00 RESET/  CSM POWER ON
+        2, 0x01, 0xB5, // 0x01 CLOCK_MANAGER/ MCLK=BCLK
+        2, 0x02, 0x18, // 0x02 CLOCK_MANAGER/ MULT_PRE=3
+        2, 0x0D, 0x01, // 0x0D SYSTEM/ Power up analog circuitry
+        2, 0x12, 0x00, // 0x12 SYSTEM/ power-up DAC - NOT default
+        2, 0x13, 0x10, // 0x13 SYSTEM/ Enable output to HP drive - NOT default
+        2, 0x32, 0xBF, // 0x32 DAC/ DAC volume (0xBF == ±0 dB )
+        2, 0x37, 0x08, // 0x37 DAC/ Bypass DAC equalizer - NOT default
+        0
+    };
+    static constexpr const uint8_t disabled_bulk_data[] = {0};
+
+    i2c_bulk_write(&Wire1, ES8311_ADDR, enable ? enabled_bulk_data : disabled_bulk_data);
+}
+
+/*********************************************************************
+** Function: _setup_codec_mic
+** location: modules/others/mic.cpp
+** Handles audio CODEC to enable/disable microphone
+**********************************************************************/
+void _setup_codec_mic(bool enable) {
+    if (!UseTCA8418) return;
+
+    static constexpr const uint8_t enabled_bulk_data[] = {
+        2, 0x00, 0x80, // 0x00 RESET/  CSM POWER ON
+        2, 0x01, 0xBA, // 0x01 CLOCK_MANAGER/ MCLK=BCLK
+        2, 0x02, 0x18, // 0x02 CLOCK_MANAGER/ MULT_PRE=3
+        2, 0x0D, 0x01, // 0x0D SYSTEM/ Power up analog circuitry
+        2, 0x0E, 0x02, // 0x0E SYSTEM/ : Enable analog PGA, enable ADC modulator
+        2, 0x14, 0x10, // ES8311_ADC_REG14 : select Mic1p-Mic1n / PGA GAIN (minimum)
+        2, 0x17, 0xBF, // ES8311_ADC_REG17 : ADC_VOLUME 0xBF == ± 0 dB
+        2, 0x1C, 0x6A, // ES8311_ADC_REG1C : ADC Equalizer bypass, cancel DC offset in digital domain
+        0
+    };
+    static constexpr const uint8_t disabled_bulk_data[] = {
+        2,
+        0x0D,
+        0xFC, // 0x0D SYSTEM/ Power down analog circuitry
+        2,
+        0x0E,
+        0x6A, // 0x0E SYSTEM
+        2,
+        0x00,
+        0x00, // 0x00 RESET/  CSM POWER DOWN
+        0
+    };
+
+    i2c_bulk_write(&Wire1, ES8311_ADDR, enable ? enabled_bulk_data : disabled_bulk_data);
+}
