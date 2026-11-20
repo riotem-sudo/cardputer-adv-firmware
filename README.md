@@ -7,11 +7,57 @@
 | **Bruce 合并版** | Bruce 1.17 中文 + JosephCGS ADV 的 CC1101/NRF24/IR 支持 + 自加 Princeton/PT2262 暴力破解与 UNILARM 拨码 + 中文化扩到 678 条 | 1.17-zh-merged |
 | **M5Launcher 中文版** | 官方 bmorcelli/Launcher 3.0.0 全界面中文化（自带 12px 点阵字库与查表层） | 3.0.0-zh |
 
-固件二进制在 [Releases](../../releases) 里，仓库里放的是文档与源码补丁。
+固件二进制在 [Releases](../../releases) 里，仓库里放的是文档与源码补丁。校验值见 `SHA256SUMS.txt`。
 
 ---
 
-## 一、刷写
+## 版本对比
+
+| | Bruce 合并版 | Launcher 中文版 |
+|---|---|---|
+| 上游 | Bruce 1.17 中文（`sunshinexk/Bruce-Cardputer-zh`） | M5Launcher 3.0.0（`bmorcelli/Launcher`） |
+| 用途 | 多工具射频/红外/RFID 固件 | 固件启动器（从 SD/OTA/WebUI 装别的固件） |
+| 体积 | 5,022,896 B | 1,507,584 B |
+| app 分区 | 4.9MB（占 97.0%） | 2.0MB（占 68.8%，已从 1.35MB 扩大） |
+| 中文方式 | 上游自带中文字库 + 词条扩到 678 条 | 自建查表层 + 12px 点阵字库（264 字） |
+| 特色功能 | ProtoPirate、Princeton/PT2262 暴力破解、UNILARM 拨码、ADV CC1101/NRF24/IR 引脚 | 全界面中文，可按 `;` `.` 导航装固件 |
+| 分区表 | app0 0x10000 / 0x4E0000 | app0 0x10000 / 0x200000 |
+
+两者都是 0x0 全量镜像，互刷必须整片写。
+
+**截图**（待补：`docs/screenshots/`，把实机拍的界面照丢进去即可）
+
+---
+
+## 补丁怎么用
+
+仓库里的 `patches/` 同时提供两种形态：
+
+**A. `git apply` 补丁（推荐）**
+
+```bash
+# Bruce
+git clone https://github.com/sunshinexk/Bruce-Cardputer-zh
+cd Bruce-Cardputer-zh && git checkout <1.17-zh 对应提交>
+git apply /path/to/bruce-1.17-zh-merged.patch
+
+# Launcher
+git clone https://github.com/bmorcelli/Launcher && cd Launcher
+git checkout 3.0.0 && git submodule update --init
+git apply /path/to/launcher-3.0.0-zh.patch
+cp /path/to/ardgfx.cpp /path/to/ardgfx.h lib/DisplayDrivers/src/backends/
+cp /path/to/zh_lang.h /path/to/zh_font.h lib/DisplayDrivers/src/
+```
+
+两个补丁均已用 `git apply --check` 验证过能干净应用。
+
+**B. 整文件替换**
+
+`patches/bruce/interface.cpp`、`emv_reader.cpp` 是**完整文件**而非 diff——因为本地留存的"原始"副本在改完后被覆盖，无法产出可信 diff。这两个文件直接覆盖到源码同路径即可（内容是 ADV 引脚默认值 + EMV AID→卡组织兜底）。
+
+---
+
+## 刷写
 
 两个固件都是 **0x0 全量镜像**：
 
@@ -27,7 +73,7 @@ M5Burner → 自定义固件 → 选 bin → 烧写，也可以。
 
 ---
 
-## 二、Bruce 合并版做了什么
+## Bruce 合并版做了什么
 
 **来源**
 - Bruce 1.17 中文固件：`sunshinexk/Bruce-Cardputer-zh`（v1.17-zh）
@@ -59,7 +105,7 @@ IR TX:  44（可选 3/4/5/6/13/15）
 
 ---
 
-## 三、M5Launcher 中文版做了什么
+## M5Launcher 中文版做了什么
 
 官方 Launcher 3.0.0 **没有多语言机制**，显示库也只支持 8px 英文点阵，所以做了三层：
 
@@ -78,18 +124,21 @@ IR TX:  44（可选 3/4/5/6/13/15）
 
 ---
 
-## 四、仓库结构
+## 仓库结构
 
 ```
 docs/                                   固件说明、功能使用说明、Launcher 中文说明
-patches/bruce/                          改动的源码文件（对照上游）
-patches/launcher/                       Launcher 汉化改动（显示后端 + 生成物）
+bruce-1.17-zh-merged.patch             Bruce 改动（git apply 即用）
+launcher-3.0.0-zh.patch                  Launcher 改动（git apply 即用）
+patches/bruce/                          Bruce 改动文件（整文件备用）
+patches/launcher/                       Launcher 汉化层文件（ardgfx / zh_lang / zh_font / 翻译表）
 patches/launcher/tools/                 翻译表与字库生成脚本
+SHA256SUMS.txt                          固件校验值
 ```
 
 ---
 
-## 五、许可
+## 许可
 
 - **Bruce**：上游为 GPL-3.0，本仓库的二进制基于其修改版，改动点全部以补丁形式提供；完整源码请取 `sunshinexk/Bruce-Cardputer-zh` 后按 `patches/` 应用。
 - **M5Launcher**：上游 `bmorcelli/Launcher` 为 MIT，修改部分同样以补丁形式提供。
