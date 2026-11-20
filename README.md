@@ -25,7 +25,7 @@
 
 两者都是 0x0 全量镜像，互刷必须整片写。
 
-**截图**（待补：`docs/screenshots/`，把实机拍的界面照丢进去即可）
+**截图**：待补。目录、命名规范与建议拍哪几张见 [docs/screenshots/README.md](docs/screenshots/README.md)。
 
 ---
 
